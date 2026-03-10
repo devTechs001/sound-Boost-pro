@@ -7,7 +7,6 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
-#include <source_location>
 
 namespace SoundBoost {
 
@@ -35,44 +34,14 @@ public:
     void setConsoleOutput(bool enabled) { m_consoleOutput = enabled; }
     void setFileOutput(bool enabled, const std::string& path = "");
 
-    template<typename... Args>
-    void log(LogLevel level, const std::source_location& loc,
-             std::string_view format, Args&&... args) {
-        if (level < m_level) return;
+    void log(LogLevel level, const char* file, int line, const std::string& message);
 
-        std::string message = formatMessage(format, std::forward<Args>(args)...);
-        writeLog(level, loc, message);
-    }
-
-    template<typename... Args>
-    void trace(std::string_view format, Args&&... args) {
-        log(LogLevel::Trace, std::source_location::current(), format, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void debug(std::string_view format, Args&&... args) {
-        log(LogLevel::Debug, std::source_location::current(), format, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void info(std::string_view format, Args&&... args) {
-        log(LogLevel::Info, std::source_location::current(), format, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void warning(std::string_view format, Args&&... args) {
-        log(LogLevel::Warning, std::source_location::current(), format, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void error(std::string_view format, Args&&... args) {
-        log(LogLevel::Error, std::source_location::current(), format, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void critical(std::string_view format, Args&&... args) {
-        log(LogLevel::Critical, std::source_location::current(), format, std::forward<Args>(args)...);
-    }
+    void trace(const std::string& msg) { log(LogLevel::Trace, "", 0, msg); }
+    void debug(const std::string& msg) { log(LogLevel::Debug, "", 0, msg); }
+    void info(const std::string& msg) { log(LogLevel::Info, "", 0, msg); }
+    void warning(const std::string& msg) { log(LogLevel::Warning, "", 0, msg); }
+    void error(const std::string& msg) { log(LogLevel::Error, "", 0, msg); }
+    void critical(const std::string& msg) { log(LogLevel::Critical, "", 0, msg); }
 
 private:
     Logger() = default;
@@ -81,14 +50,9 @@ private:
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
 
-    template<typename... Args>
-    std::string formatMessage(std::string_view format, Args&&... args);
-
-    void writeLog(LogLevel level, const std::source_location& loc,
-                  const std::string& message);
+    void writeLog(LogLevel level, const char* file, int line, const std::string& message);
     std::string getTimestamp();
     std::string levelToString(LogLevel level);
-    std::string levelToColor(LogLevel level);
 
     LogLevel m_level{LogLevel::Info};
     bool m_consoleOutput{true};
@@ -101,11 +65,11 @@ private:
 };
 
 // Convenience macros
-#define LOG_TRACE(...) SoundBoost::Logger::getInstance().trace(__VA_ARGS__)
-#define LOG_DEBUG(...) SoundBoost::Logger::getInstance().debug(__VA_ARGS__)
-#define LOG_INFO(...) SoundBoost::Logger::getInstance().info(__VA_ARGS__)
-#define LOG_WARN(...) SoundBoost::Logger::getInstance().warning(__VA_ARGS__)
-#define LOG_ERROR(...) SoundBoost::Logger::getInstance().error(__VA_ARGS__)
-#define LOG_CRITICAL(...) SoundBoost::Logger::getInstance().critical(__VA_ARGS__)
+#define LOG_TRACE(msg) SoundBoost::Logger::getInstance().log(LogLevel::Trace, __FILE__, __LINE__, msg)
+#define LOG_DEBUG(msg) SoundBoost::Logger::getInstance().log(LogLevel::Debug, __FILE__, __LINE__, msg)
+#define LOG_INFO(msg) SoundBoost::Logger::getInstance().log(LogLevel::Info, __FILE__, __LINE__, msg)
+#define LOG_WARN(msg) SoundBoost::Logger::getInstance().log(LogLevel::Warning, __FILE__, __LINE__, msg)
+#define LOG_ERROR(msg) SoundBoost::Logger::getInstance().log(LogLevel::Error, __FILE__, __LINE__, msg)
+#define LOG_CRITICAL(msg) SoundBoost::Logger::getInstance().log(LogLevel::Critical, __FILE__, __LINE__, msg)
 
 } // namespace SoundBoost
