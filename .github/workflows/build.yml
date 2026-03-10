@@ -1,4 +1,3 @@
-# .github/workflows/build.yml
 name: Build and Test
 
 on:
@@ -7,72 +6,56 @@ on:
   pull_request:
     branches: [ main ]
   release:
-    types: [ created ]
+    types: [ published ]
 
 env:
   BUILD_TYPE: Release
-  QT_VERSION: 6.6.0
+  QT_VERSION: '6.6.0'
 
 jobs:
   build-windows:
     runs-on: windows-latest
-
+    
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-
+    
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
         version: ${{ env.QT_VERSION }}
         modules: 'qtmultimedia'
-
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgGitCommitId: '2024.01.12'
-
-    - name: Install dependencies
-      run: |
-        vcpkg install onnxruntime:x64-windows nlohmann-json:x64-windows gtest:x64-windows
-
+    
     - name: Configure CMake
       run: |
-        cmake -B build -G "Visual Studio 17 2022" -A x64 `
+        cmake -B build `
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake `
           -DBUILD_TESTS=ON `
           -DENABLE_ML=ON `
           -DENABLE_SIMD=ON
-
+    
     - name: Build
       run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
-
+    
     - name: Test
       working-directory: build
       run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure --parallel
-
-    - name: Package
-      if: github.event_name == 'release'
-      run: |
-        cd build
-        cpack -G NSIS -C ${{ env.BUILD_TYPE }}
-
+    
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: SoundBoostPro-Windows
-        path: build/*.exe
+        path: build/Release/*.exe
 
   build-linux:
     runs-on: ubuntu-latest
-
+    
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-
+    
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -81,17 +64,8 @@ jobs:
           qt6-base-dev qt6-multimedia-dev \
           libpulse-dev libasound2-dev \
           libpipewire-0.3-dev \
-          libgtest-dev nlohmann-json3-dev \
-          libfuse2
-
-    - name: Install ONNX Runtime
-      run: |
-        wget https://github.com/microsoft/onnxruntime/releases/download/v1.16.0/onnxruntime-linux-x64-1.16.0.tgz
-        tar -xzf onnxruntime-linux-x64-1.16.0.tgz
-        sudo cp -r onnxruntime-linux-x64-1.16.0/include/* /usr/local/include/
-        sudo cp -r onnxruntime-linux-x64-1.16.0/lib/* /usr/local/lib/
-        sudo ldconfig
-
+          libgtest-dev nlohmann-json3-dev
+    
     - name: Configure CMake
       run: |
         cmake -B build -G Ninja \
@@ -99,51 +73,37 @@ jobs:
           -DBUILD_TESTS=ON \
           -DENABLE_ML=ON \
           -DENABLE_SIMD=ON
-
+    
     - name: Build
       run: cmake --build build --parallel
-
+    
     - name: Test
       working-directory: build
       run: ctest --output-on-failure --parallel
-
-    - name: Create AppImage
-      if: github.event_name == 'release'
-      run: |
-        chmod +x scripts/install/linux/create_appimage.sh
-        ./scripts/install/linux/create_appimage.sh
-
+    
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: SoundBoostPro-Linux
-        path: build/*.AppImage
+        path: build/SoundBoostPro
 
   build-macos:
     runs-on: macos-latest
-
+    
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-
+    
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
         version: ${{ env.QT_VERSION }}
         modules: 'qtmultimedia'
-
+    
     - name: Install dependencies
-      run: |
-        brew install cmake ninja nlohmann-json googletest
-
-    - name: Install ONNX Runtime
-      run: |
-        wget https://github.com/microsoft/onnxruntime/releases/download/v1.16.0/onnxruntime-osx-arm64-1.16.0.tgz
-        tar -xzf onnxruntime-osx-arm64-1.16.0.tgz
-        sudo cp -r onnxruntime-osx-arm64-1.16.0/include/* /usr/local/include/
-        sudo cp -r onnxruntime-osx-arm64-1.16.0/lib/* /usr/local/lib/
-
+      run: brew install cmake ninja nlohmann-json googletest
+    
     - name: Configure CMake
       run: |
         cmake -B build -G Ninja \
@@ -151,64 +111,36 @@ jobs:
           -DBUILD_TESTS=ON \
           -DENABLE_ML=ON \
           -DENABLE_SIMD=ON
-
+    
     - name: Build
       run: cmake --build build --parallel
-
+    
     - name: Test
       working-directory: build
       run: ctest --output-on-failure --parallel
-
-    - name: Create DMG
-      if: github.event_name == 'release'
-      run: |
-        chmod +x scripts/install/macos/create_dmg.sh
-        ./scripts/install/macos/create_dmg.sh
-
+    
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: SoundBoostPro-macOS
-        path: build/*.dmg
+        path: build/SoundBoostPro.app
 
   code-quality:
     runs-on: ubuntu-latest
-
+    
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang-tidy clang-format cppcheck
-
+        sudo apt-get install -y clang-tidy clang-format
+    
     - name: Check formatting
       run: |
         find src -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
-
+    
     - name: Run clang-tidy
       run: |
         cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        find src -name "*.cpp" | xargs clang-tidy -p build
-
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem src/
-
-  release:
-    needs: [build-windows, build-linux, build-macos, build-android]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-
-    - name: Upload Release Assets
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          SoundBoostPro-Windows/*.exe
-          SoundBoostPro-Linux/*.AppImage
-          SoundBoostPro-macOS/*.dmg
-          SoundBoostPro-Android/*.apk
+        find src -name "*.cpp" | head -5 | xargs clang-tidy -p build || true

@@ -1,167 +1,196 @@
 // src/core/dsp/FFTProcessor.cpp
 #include "FFTProcessor.hpp"
+#include "../audio/AudioBuffer.hpp"
+
 #include <cmath>
 #include <algorithm>
+#include <numbers>
 
 namespace SoundBoost {
 
-void FFTProcessor::initialize(size_t fftSize) {
-    m_fftSize = fftSize;
-    m_workBuffer.resize(fftSize);
+FFTProcessor::FFTProcessor() = default;
+FFTProcessor::~FFTProcessor() = default;
 
-    // Build bit reversal table
-    m_bitReversalTable.resize(fftSize);
-    size_t bits = 0;
-    while ((1u << bits) < fftSize) bits++;
+void FFTProcessor::initialize(int fftSize) {
+    // Ensure power of 2
+    int size = 1;
+    while (size < fftSize) size *= 2;
+    m_fftSize = size;
 
-    for (size_t i = 0; i < fftSize; ++i) {
-        size_t rev = 0;
-        for (size_t j = 0; j < bits; ++j) {
-            if (i & (1u << j)) {
-                rev |= (1u << (bits - 1 - j));
+    // Allocate buffers
+    m_twiddleFactors.resize(m_fftSize);
+    m_window.resize(m_fftSize);
+    m_workBuffer.resize(m_fftSize);
+    m_realBuffer.resize(m_fftSize);
+    m_bitReversalTable.resize(m_fftSize);
+
+    computeTwiddleFactors();
+    computeWindow();
+
+    // Compute bit reversal table
+    int bits = 0;
+    for (int i = m_fftSize; i > 1; i >>= 1) ++bits;
+
+    for (int i = 0; i < m_fftSize; ++i) {
+        int reversed = 0;
+        for (int j = 0; j < bits; ++j) {
+            if (i & (1 << j)) {
+                reversed |= (1 << (bits - 1 - j));
             }
         }
-        m_bitReversalTable[i] = rev;
+        m_bitReversalTable[i] = reversed;
     }
 
-    // Build twiddle factors
-    m_twiddleFactors.resize(fftSize / 2);
-    for (size_t i = 0; i < fftSize / 2; ++i) {
-        float angle = -2.0f * M_PI * i / fftSize;
+    m_initialized = true;
+}
+
+void FFTProcessor::computeTwiddleFactors() {
+    const float twoPi = 2.0f * std::numbers::pi_v<float>;
+
+    for (int i = 0; i < m_fftSize; ++i) {
+        float angle = -twoPi * i / m_fftSize;
         m_twiddleFactors[i] = std::complex<float>(std::cos(angle), std::sin(angle));
     }
 }
 
-void FFTProcessor::fft(std::complex<float>* data, bool inverse) {
-    const size_t n = m_fftSize;
+void FFTProcessor::computeWindow() {
+    const float pi = std::numbers::pi_v<float>;
+    const float twoPi = 2.0f * pi;
 
-    // Bit reversal
-    for (size_t i = 0; i < n; ++i) {
-        size_t j = m_bitReversalTable[i];
-        if (i < j) {
-            std::swap(data[i], data[j]);
-        }
-    }
-
-    // Cooley-Tukey FFT
-    for (size_t len = 2; len <= n; len *= 2) {
-        size_t halfLen = len / 2;
-        float angle = (inverse ? 2.0f : -2.0f) * M_PI / len;
-        std::complex<float> wlen(std::cos(angle), std::sin(angle));
-
-        for (size_t i = 0; i < n; i += len) {
-            std::complex<float> w(1.0f, 0.0f);
-            for (size_t j = 0; j < halfLen; ++j) {
-                std::complex<float> u = data[i + j];
-                std::complex<float> v = data[i + j + halfLen] * w;
-                data[i + j] = u + v;
-                data[i + j + halfLen] = u - v;
-                w *= wlen;
+    switch (m_windowType) {
+        case WindowType::None:
+            std::fill(m_window.begin(), m_window.end(), 1.0f);
+            break;
+        case WindowType::Hann:
+            for (int i = 0; i < m_fftSize; ++i) {
+                m_window[i] = 0.5f * (1.0f - std::cos(twoPi * i / (m_fftSize - 1)));
             }
-        }
-    }
-
-    // Normalize for inverse FFT
-    if (inverse) {
-        for (size_t i = 0; i < n; ++i) {
-            data[i] /= n;
-        }
-    }
-}
-
-void FFTProcessor::rfft(const float* input, std::complex<float>* output) {
-    // Pack real input into complex
-    for (size_t i = 0; i < m_fftSize; ++i) {
-        m_workBuffer[i] = std::complex<float>(input[i], 0.0f);
-    }
-
-    // Perform complex FFT
-    fft(m_workBuffer.data(), false);
-
-    // Extract positive frequencies (0 to Nyquist)
-    size_t numBins = m_fftSize / 2 + 1;
-    for (size_t i = 0; i < numBins; ++i) {
-        output[i] = m_workBuffer[i];
+            break;
+        case WindowType::Hamming:
+            for (int i = 0; i < m_fftSize; ++i) {
+                m_window[i] = 0.54f - 0.46f * std::cos(twoPi * i / (m_fftSize - 1));
+            }
+            break;
+        case WindowType::Blackman:
+            for (int i = 0; i < m_fftSize; ++i) {
+                float a0 = 0.42f, a1 = 0.5f, a2 = 0.08f;
+                m_window[i] = a0 - a1 * std::cos(twoPi * i / (m_fftSize - 1))
+                            + a2 * std::cos(4.0f * pi * i / (m_fftSize - 1));
+            }
+            break;
+        default:
+            std::fill(m_window.begin(), m_window.end(), 1.0f);
     }
 }
 
-void FFTProcessor::rifft(const std::complex<float>* input, float* output) {
-    // Pack into full spectrum (exploit conjugate symmetry)
-    size_t numBins = m_fftSize / 2 + 1;
+void FFTProcessor::setWindow(WindowType type) {
+    m_windowType = type;
+    if (m_initialized) computeWindow();
+}
 
-    m_workBuffer[0] = input[0];
-    for (size_t i = 1; i < numBins - 1; ++i) {
-        m_workBuffer[i] = input[i];
-        m_workBuffer[m_fftSize - i] = std::conj(input[i]);
-    }
-    if (m_fftSize % 2 == 0) {
-        m_workBuffer[numBins - 1] = input[numBins - 1];
-    }
-
-    // Perform inverse FFT
-    fft(m_workBuffer.data(), true);
-
-    // Extract real part
-    for (size_t i = 0; i < m_fftSize; ++i) {
-        output[i] = m_workBuffer[i].real();
+void FFTProcessor::applyWindow(float* data, int size) {
+    int windowSize = std::min(size, m_fftSize);
+    for (int i = 0; i < windowSize; ++i) {
+        data[i] *= m_window[i];
     }
 }
 
 void FFTProcessor::forward(const float* input, std::complex<float>* output) {
-    rfft(input, output);
+    if (!m_initialized) return;
+    for (int i = 0; i < m_fftSize; ++i) {
+        m_workBuffer[i] = std::complex<float>(input[i] * m_window[i], 0.0f);
+    }
+    fftIterative(m_workBuffer.data(), m_fftSize, false);
+    std::copy(m_workBuffer.begin(), m_workBuffer.end(), output);
 }
 
 void FFTProcessor::forward(const AudioBuffer& input, std::vector<std::complex<float>>& output) {
-    size_t numBins = m_fftSize / 2 + 1;
-    output.resize(numBins);
+    if (!m_initialized) return;
+    const float* data = input.getData();
+    size_t numSamples = input.getNumSamples();
+    int channels = input.getNumChannels();
 
-    // Use first channel
-    std::vector<float> temp(m_fftSize, 0.0f);
-    size_t copySize = std::min(m_fftSize, input.getNumSamples());
-    std::copy(input.getData(), input.getData() + copySize, temp.begin());
-
-    rfft(temp.data(), output.data());
+    for (int i = 0; i < m_fftSize; ++i) {
+        if (i < static_cast<int>(numSamples)) {
+            float sample = 0.0f;
+            for (int ch = 0; ch < channels; ++ch) {
+                sample += data[i * channels + ch];
+            }
+            m_realBuffer[i] = sample / channels;
+        } else {
+            m_realBuffer[i] = 0.0f;
+        }
+    }
+    output.resize(m_fftSize);
+    forward(m_realBuffer.data(), output.data());
 }
 
 void FFTProcessor::inverse(const std::complex<float>* input, float* output) {
-    rifft(input, output);
+    if (!m_initialized) return;
+    std::copy(input, input + m_fftSize, m_workBuffer.begin());
+    fftIterative(m_workBuffer.data(), m_fftSize, true);
+    float scale = 1.0f / m_fftSize;
+    for (int i = 0; i < m_fftSize; ++i) {
+        output[i] = m_workBuffer[i].real() * scale;
+    }
 }
 
-void FFTProcessor::inverse(const std::vector<std::complex<float>>& input, AudioBuffer& output) {
-    std::vector<float> temp(m_fftSize);
-    rifft(input.data(), temp.data());
+void FFTProcessor::fftIterative(std::complex<float>* data, int n, bool inverse) {
+    // Bit reversal
+    for (int i = 0; i < n; ++i) {
+        int j = m_bitReversalTable[i];
+        if (i < j) std::swap(data[i], data[j]);
+    }
 
-    // Copy to output
-    size_t copySize = std::min(m_fftSize, output.getNumSamples());
-    std::copy(temp.begin(), temp.begin() + copySize, output.getData());
+    // Cooley-Tukey
+    for (int len = 2; len <= n; len *= 2) {
+        float angle = (inverse ? 2.0f : -2.0f) * std::numbers::pi_v<float> / len;
+        std::complex<float> wLen(std::cos(angle), std::sin(angle));
+
+        for (int i = 0; i < n; i += len) {
+            std::complex<float> w(1.0f, 0.0f);
+            for (int j = 0; j < len / 2; ++j) {
+                std::complex<float> u = data[i + j];
+                std::complex<float> t = w * data[i + j + len / 2];
+                data[i + j] = u + t;
+                data[i + j + len / 2] = u - t;
+                w *= wLen;
+            }
+        }
+    }
 }
 
 std::vector<float> FFTProcessor::computeMagnitudeSpectrum(const AudioBuffer& buffer) {
     std::vector<std::complex<float>> spectrum;
     forward(buffer, spectrum);
-
-    size_t numBins = spectrum.size();
+    int numBins = getNumBins();
     std::vector<float> magnitudes(numBins);
-
-    for (size_t i = 0; i < numBins; ++i) {
+    for (int i = 0; i < numBins; ++i) {
         magnitudes[i] = std::abs(spectrum[i]);
     }
-
     return magnitudes;
+}
+
+std::vector<float> FFTProcessor::computePowerSpectrum(const AudioBuffer& buffer) {
+    auto spectrum = computeMagnitudeSpectrum(buffer);
+    for (float& v : spectrum) v *= v;
+    return spectrum;
 }
 
 std::vector<float> FFTProcessor::computePhaseSpectrum(const AudioBuffer& buffer) {
     std::vector<std::complex<float>> spectrum;
     forward(buffer, spectrum);
-
-    size_t numBins = spectrum.size();
-    std::vector<float> phases(numBins);
-
-    for (size_t i = 0; i < numBins; ++i) {
-        phases[i] = std::arg(spectrum[i]);
+    int numBins = getNumBins();
+    std::vector<float> phase(numBins);
+    for (int i = 0; i < numBins; ++i) {
+        phase[i] = std::arg(spectrum[i]);
     }
+    return phase;
+}
 
-    return phases;
+void FFTProcessor::reset() {
+    std::fill(m_workBuffer.begin(), m_workBuffer.end(), std::complex<float>(0, 0));
+    std::fill(m_realBuffer.begin(), m_realBuffer.end(), 0.0f);
 }
 
 } // namespace SoundBoost
