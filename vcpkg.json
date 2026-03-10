@@ -1,0 +1,56 @@
+{
+    "name": "soundboost-pro",
+    "version": "2.0.0",
+    "description": "Enterprise Cross-Platform Audio Enhancement Suite",
+    "homepage": "https://soundboostpro.com",
+    "license": "PROPRIETARY",
+    "supports": "(windows & x64) | (linux & x64) | (osx & x64)",
+    "dependencies": [
+        "qt6-base",
+        "qt6-multimedia",
+        "qt6-tools",
+        {
+            "name": "onnxruntime",
+            "platform": "!android & !ios"
+        },
+        "nlohmann-json",
+        {
+            "name": "gtest",
+            "dev": true
+        },
+        {
+            "name": "benchmark",
+            "dev": true
+        }
+    ],
+    "overrides": [
+        {
+            "name": "qt6-base",
+            "version": "6.6.0"
+        },
+        {
+            "name": "qt6-multimedia",
+            "version": "6.6.0"
+        }
+    ],
+    "features": {
+        "ml": {
+            "description": "Machine Learning features with ONNX Runtime",
+            "dependencies": [
+                "onnxruntime"
+            ]
+        },
+        "tests": {
+            "description": "Build test suite",
+            "dependencies": [
+                "gtest"
+            ]
+        },
+        "benchmarks": {
+            "description": "Build performance benchmarks",
+            "dependencies": [
+                "benchmark"
+            ]
+        }
+    }
+}

@@ -1,0 +1,62 @@
+@startuml ml_workflow.puml
+title ML Audio Analysis Workflow
+
+start
+
+:Audio Buffer Input;
+
+partition "Feature Extraction" {
+    :Windowing (Hann);
+    :FFT Computation;
+    :Mel Filterbank;
+    :MFCC Calculation\n(13 coefficients);
+    :Spectral Features\n(Centroid, Rolloff, Flux);
+    :Temporal Features;
+}
+
+partition "Model Inference" {
+    partition "Genre Classification" {
+        :Load ONNX Model;
+        :Input: MFCC Features;
+        :Neural Network Forward Pass;
+        :Output: Genre + Confidence;
+    }
+    
+    partition "Beat Detection" {
+        :Onset Detection Function;
+        :Peak Picking;
+        :Tempo Estimation\n(Auto-correlation);
+        :Output: BPM + Beat Positions;
+    }
+    
+    partition "Voice Detection" {
+        :Spectral Features;
+        :Harmonic Analysis;
+        :Classification;
+        :Output: Voice Present + Confidence;
+    }
+}
+
+partition "Post-processing" {
+    :Confidence Thresholding;
+    :Temporal Smoothing;
+    :Decision Fusion;
+}
+
+partition "Adaptive Response" {
+    if (Adaptive EQ Enabled?) then (yes)
+        :Calculate EQ Suggestions;
+        :Update Effect Parameters;
+    else (no)
+    endif
+    
+    :Update UI with Analysis;
+}
+
+stop
+
+note right: Models: ONNX format
+note right: Inference: ONNX Runtime
+note right: Update rate: ~10 Hz
+
+@enduml

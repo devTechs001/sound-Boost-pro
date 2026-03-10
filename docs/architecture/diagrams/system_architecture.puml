@@ -1,0 +1,86 @@
+@startuml system_architecture.puml
+title SoundBoost Pro - System Architecture
+
+package "Application Layer" {
+    component [MainWindow] as MW
+    component [Views] as V
+    component [Components] as C
+    component [Themes] as T
+}
+
+package "Service Layer" {
+    component [AudioService] as AS
+    component [SettingsService] as SS
+    component [ProfileService] as PS
+    component [EventBus] as EB
+}
+
+package "Core Layer" {
+    package "Audio Engine" {
+        component [AudioCapture] as AC
+        component [DSP Processor] as DSP
+        component [Effect Chain] as EC
+        component [Spectrum Analyzer] as SA
+    }
+    
+    package "ML Engine" {
+        component [Genre Detector] as GD
+        component [Beat Detector] as BD
+        component [Voice Detector] as VD
+        component [Adaptive EQ] as AEQ
+    }
+}
+
+package "Platform Layer" {
+    component [Windows/WASAPI] as WIN
+    component [Linux/PulseAudio] as LIN
+    component [macOS/CoreAudio] as MAC
+    component [Mobile/AAudio] as MOB
+}
+
+MW --> V
+MW --> C
+MW --> T
+
+MW --> AS
+MW --> SS
+MW --> PS
+
+AS --> AC
+AS --> DSP
+AS --> EC
+AS --> SA
+
+AS --> GD
+AS --> BD
+AS --> VD
+AS --> AEQ
+
+AC --> WIN
+AC --> LIN
+AC --> MAC
+AC --> MOB
+
+note right of MW
+    Qt6-based GUI
+    Real-time updates
+end note
+
+note right of EC
+    Effect chain:
+    1. Noise Gate
+    2. Bass Booster
+    3. Equalizer
+    4. Compressor
+    5. Stereo Widener
+    6. Reverb
+    7. Limiter
+end note
+
+note right of GD
+    ONNX Runtime
+    MFCC Features
+    Neural Network
+end note
+
+@enduml

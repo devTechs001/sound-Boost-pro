@@ -1,0 +1,50 @@
+@startuml audio_pipeline.puml
+title Audio Processing Pipeline
+
+start
+
+:Audio Input;
+partition "Capture" {
+    :Platform-specific\nAudio Capture;
+    :Lock-free Ring Buffer;
+}
+
+partition "Pre-processing" {
+    :DC Offset Removal;
+    :Sample Rate Conversion\n(if needed);
+}
+
+partition "Effect Chain" {
+    :Noise Gate;
+    :Bass Booster;
+    :10-Band Equalizer;
+    :Compressor;
+    :Stereo Widener;
+    :Reverb (optional);
+    :Limiter;
+}
+
+partition "Analysis" {
+    :FFT Processing;
+    :Spectrum Calculation;
+    :Level Metering;
+    if (ML Enabled?) then (yes)
+        :Feature Extraction;
+        :Model Inference;
+        :Adaptive Updates;
+    else (no)
+    endif
+}
+
+partition "Output" {
+    :Master Volume;
+    :Platform-specific\nAudio Output;
+}
+
+stop
+
+note right: Latency target: < 10ms
+note right: Buffer size: 128-2048 samples
+note right: Sample rate: 44.1/48/96 kHz
+
+@enduml
