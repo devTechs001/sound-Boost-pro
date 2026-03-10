@@ -8,38 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] - 2024-01-15
 
 ### Added
-- Complete rewrite using C++20 and Qt6
-- Machine learning-powered audio analysis
-- Real-time genre detection and beat tracking
-- Adaptive EQ based on audio content
-- Cross-platform support (Windows, macOS, Linux, Android, iOS)
-- SIMD-optimized DSP processing (AVX2, NEON)
-- New modern GUI with multiple themes
-- Profile system for saving presets
-- Comprehensive test suite
+- Complete cross-platform audio enhancement suite
+- Real-time bass boost with harmonic enhancement
+- 10-band parametric equalizer
+- Dynamic processing (compressor, limiter)
+- Stereo widening and reverb effects
+- ML-powered audio analysis (genre detection, BPM, voice detection)
+- Adaptive EQ suggestions based on audio content
+- Cross-platform support (Windows, Linux, macOS)
+- System tray integration
+- Theme support (Dark, Light, Neon)
+- Preset management system
+- Real-time spectrum analyzer
+- VU meters with peak hold
 
 ### Changed
-- Migrated from Qt5 to Qt6
-- Improved audio engine architecture
-- Enhanced effect chain processing
-- Better memory management with lock-free buffers
+- Complete rewrite using C++20
+- Migrated to Qt6 framework
+- Improved audio engine with lock-free buffers
+- Enhanced SIMD optimizations (AVX2, NEON)
 
-### Removed
-- Legacy Qt4 compatibility code
-- Deprecated effect algorithms
+### Fixed
+- Various bug fixes and performance improvements
 
 ## [1.5.0] - 2023-06-20
 
 ### Added
-- Stereo widener effect
-- Reverb effect with presets
-- System tray integration
+- Basic equalizer functionality
+- Preset support
+- Windows platform support
 
-## [1.0.0] - 2022-01-10
+## [1.0.0] - 2023-01-10
 
 ### Added
 - Initial release
-- 10-band equalizer
-- Bass booster
-- Compressor/limiter
-- Basic GUI
+- Basic audio enhancement
+- Simple UI
+
+[2.0.0]: https://github.com/devTechs001/sound-Boost-pro/releases/tag/v2.0.0
+[1.5.0]: https://github.com/devTechs001/sound-Boost-pro/releases/tag/v1.5.0
+[1.0.0]: https://github.com/devTechs001/sound-Boost-pro/releases/tag/v1.0.0

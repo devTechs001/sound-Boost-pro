@@ -1,322 +1,159 @@
 # SoundBoost Pro - Developer Guide
 
-## Table of Contents
+## Project Overview
 
-1. [Getting Started](#getting-started)
-2. [Architecture Overview](#architecture-overview)
-3. [Building from Source](#building-from-source)
-4. [Code Style](#code-style)
-5. [Testing](#testing)
-6. [Debugging](#debugging)
-7. [Contributing](#contributing)
+SoundBoost Pro is an enterprise-grade audio enhancement application built with:
+- **C++20**: Modern C++ features
+- **Qt6**: Cross-platform GUI framework
+- **ONNX Runtime**: Machine learning inference
+- **SIMD**: Optimized DSP operations
 
-## Getting Started
+## Architecture
 
-### Prerequisites
-
-- **Compiler**: GCC 11+, Clang 13+, or MSVC 2022+
-- **CMake**: 3.20 or later
-- **Qt**: 6.6 or later
-- **vcpkg**: For dependency management
-- **Git**: For version control
-
-### Clone the Repository
-
-```bash
-git clone https://github.com/soundboostpro/soundboost-pro.git
-cd soundboost-pro
-git submodule update --init --recursive
-```
-
-## Architecture Overview
-
-### Directory Structure
+### Layered Architecture
 
 ```
-soundboost-pro/
-├── src/
-│   ├── core/          # Audio engine, DSP, effects, ML
-│   ├── gui/           # Qt-based user interface
-│   ├── platform/      # Platform-specific code
-│   ├── utils/         # Utilities (logging, config)
-│   └── services/      # Application services
-├── tests/             # Test suite
-├── docs/              # Documentation
-├── scripts/           # Build and deployment scripts
-└── resources/         # Assets
+┌─────────────────────────────────────────┐
+│           Application Layer             │
+│  (MainWindow, Views, Components)        │
+├─────────────────────────────────────────┤
+│            Service Layer                │
+│  (ServiceLocator, EventBus)             │
+├─────────────────────────────────────────┤
+│             Core Layer                  │
+│  (AudioEngine, DSP, Effects, ML)        │
+├─────────────────────────────────────────┤
+│          Platform Layer                 │
+│  (Windows WASAPI, Linux PulseAudio)     │
+└─────────────────────────────────────────┘
 ```
 
 ### Key Components
 
-1. **AudioEngine**: Core audio processing
-2. **EffectChain**: Effect processing pipeline
-3. **MLEngine**: Machine learning inference
-4. **MainWindow**: Primary UI window
-5. **ServiceLocator**: Dependency injection
+#### Audio Engine
+- Real-time audio processing
+- Lock-free ring buffers
+- Effect chain management
+- ML integration
 
-## Building from Source
+#### DSP Pipeline
+1. Input capture
+2. DC offset removal
+3. Effect chain processing
+4. Spectrum analysis
+5. Output
 
-### Linux
+#### Effect Chain Order
+1. Noise Gate
+2. Bass Booster
+3. Equalizer
+4. Compressor
+5. Stereo Widener
+6. Reverb
+7. Limiter
 
-```bash
-# Install dependencies
-sudo apt-get install -y build-essential cmake ninja-build \
-    qt6-base-dev qt6-multimedia-dev libpulse-dev libasound2-dev
+## Building
 
-# Build
-./scripts/build/build_linux.sh
-```
-
-### Windows
-
-```powershell
-# Using PowerShell
-.\scripts\build\build_all.ps1 -Target all
-```
-
-### macOS
+### Development Build
 
 ```bash
-# Build
-./scripts/build/build_macos.sh
-```
-
-### Custom Build Options
-
-```bash
-cmake -B build \
-    -DCMAKE_BUILD_TYPE=Release \
+mkdir build && cd build
+cmake .. \
+    -DCMAKE_BUILD_TYPE=Debug \
     -DBUILD_TESTS=ON \
-    -DENABLE_ML=ON \
-    -DENABLE_SIMD=ON \
-    -DENABLE_PROFILING=OFF
+    -DENABLE_PROFILING=ON \
+    -DENABLE_ASAN=ON
+cmake --build . --parallel
 ```
 
-### Build Options
+### Release Build
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `BUILD_TESTS` | ON | Build test suite |
-| `BUILD_DOCS` | ON | Build documentation |
-| `ENABLE_ML` | ON | Enable ML features |
-| `ENABLE_SIMD` | ON | Enable SIMD optimizations |
-| `ENABLE_ASAN` | OFF | Enable Address Sanitizer |
-| `ENABLE_TSAN` | OFF | Enable Thread Sanitizer |
-| `ENABLE_PROFILING` | OFF | Enable profiling |
+```bash
+cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DENABLE_LTO=ON \
+    -DENABLE_SIMD=ON
+cmake --build . --parallel
+```
+
+## Testing
+
+```bash
+# Run all tests
+ctest --output-on-failure
+
+# Run specific test
+./SoundBoostUnitTests --gtest_filter=AudioBufferTest.*
+
+# Coverage
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DCODE_COVERAGE=ON
+cmake --build .
+ctest
+lcov --capture --directory . --output-file coverage.info
+genhtml coverage.info --output-directory coverage
+```
 
 ## Code Style
 
-### Formatting
-
-We use `clang-format` for consistent code style:
+We use clang-format with the project's `.clang-format` configuration:
 
 ```bash
 # Format all source files
 find src -name "*.cpp" -o -name "*.hpp" | xargs clang-format -i
 ```
 
-### Linting
+## Adding New Effects
 
-We use `clang-tidy` for code quality:
-
-```bash
-# Run clang-tidy
-run-clang-tidy -p build src/
-```
-
-### Naming Conventions
-
-- **Classes/Structs**: `CamelCase` (e.g., `AudioEngine`)
-- **Functions/Methods**: `camelCase` (e.g., `processAudio`)
-- **Variables**: `lower_case` (e.g., `bufferSize`)
-- **Members**: `m_` prefix (e.g., `m_bufferSize`)
-- **Constants**: `UPPER_CASE` (e.g., `MAX_BUFFER_SIZE`)
-- **Namespaces**: `lower_case` (e.g., `SoundBoost`)
-
-### Code Organization
-
+1. Create header inheriting from `EffectBase`:
 ```cpp
-// Header file structure
-#pragma once
-
-// 1. Includes (sorted by scope)
-#include <system_header>
-#include <qt_header>
-#include "local_header.hpp"
-
-// 2. Forward declarations
-class SomeClass;
-
-// 3. Namespace
-namespace SoundBoost {
-
-// 4. Class definition
-class MyClass {
+class MyEffect : public EffectBase {
 public:
-    // Public interface
-private:
-    // Private members
+    void initialize(int sampleRate, int bufferSize) override;
+    void process(AudioBuffer& buffer) override;
+    void reset() override;
+    std::string getName() const override { return "MyEffect"; }
 };
-
-} // namespace SoundBoost
 ```
 
-## Testing
+2. Implement in .cpp file
+3. Add to effect chain in `AudioEngine::setupDefaultEffects()`
 
-### Running Tests
+## ML Model Integration
 
-```bash
-# Build and run all tests
-cd build
-ctest --output-on-failure
-
-# Run specific test
-ctest -R test_audio_buffer --output-on-failure
-```
-
-### Writing Tests
-
-```cpp
-#include <gtest/gtest.h>
-#include "core/audio/AudioBuffer.hpp"
-
-using namespace SoundBoost;
-
-TEST(AudioBufferTest, Construction) {
-    AudioBuffer buffer(512, 2, 48000);
-    
-    EXPECT_EQ(buffer.getNumSamples(), 512);
-    EXPECT_EQ(buffer.getNumChannels(), 2);
-    EXPECT_EQ(buffer.getSampleRate(), 48000);
-}
-
-TEST_F(AudioBufferFixture, ApplyGain) {
-    // Test fixture for shared setup
-    buffer->applyGain(2.0f);
-    EXPECT_NEAR(buffer->getPeak(), 1.0f, 0.001f);
-}
-```
-
-### Test Categories
-
-- **Unit Tests**: Individual components
-- **Integration Tests**: Component interactions
-- **Performance Tests**: Benchmarks
+1. Place ONNX model in `resources/models/`
+2. Update `ModelLoader` to load the model
+3. Add inference logic in respective detector class
 
 ## Debugging
 
-### Logging
-
+### Audio Debugging
 ```cpp
-#include "utils/Logger.hpp"
+// Log audio levels
+LOG_DEBUG("Input level: {} dB", level);
 
-LOG_DEBUG("Debug message: {}", value);
-LOG_INFO("Info message: {}", value);
-LOG_WARN("Warning: {}", issue);
-LOG_ERROR("Error: {}", error);
-LOG_CRITICAL("Critical: {}", criticalIssue);
+// Use profiler for performance
+PROFILE_SCOPE("MyEffect::process");
 ```
 
-### Profiling
-
-```cpp
-#include "utils/Profiler.hpp"
-
-void expensiveFunction() {
-    PROFILE_SCOPE("expensiveFunction");
-    // Code to profile
-}
-```
-
-### Debug Build
-
+### GUI Debugging
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Debug \
-    -DENABLE_ASAN=ON \
-    -DENABLE_UBSAN=ON
+# Enable Qt debug output
+export QT_LOGGING_RULES="*.debug=true"
 ```
 
-### Common Issues
+## Performance Tips
 
-#### Memory Leaks
-
-```bash
-# Using AddressSanitizer
-cmake -B build -DENABLE_ASAN=ON
-```
-
-#### Race Conditions
-
-```bash
-# Using ThreadSanitizer
-cmake -B build -DENABLE_TSAN=ON
-```
+1. Use SIMD operations for bulk processing
+2. Minimize allocations in audio thread
+3. Use lock-free data structures
+4. Profile regularly with `ENABLE_PROFILING=ON`
 
 ## Contributing
 
-### Pull Request Process
-
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Write/update tests
-5. Ensure all tests pass
-6. Update documentation
-7. Submit a pull request
+2. Create feature branch
+3. Make changes
+4. Run tests
+5. Submit PR
 
-### Commit Message Format
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-**Example**:
-```
-feat(eq): add low-shelf filter type
-
-Added support for low-shelf filter in the equalizer.
-This allows for more precise bass control.
-
-Closes #123
-```
-
-### Code Review Checklist
-
-- [ ] Code follows style guidelines
-- [ ] Tests are included
-- [ ] Documentation is updated
-- [ ] No compiler warnings
-- [ ] Performance impact is acceptable
-
-## API Documentation
-
-### Generating Doxygen Docs
-
-```bash
-cmake -B build -DBUILD_DOCS=ON
-cd build
-make docs
-```
-
-Docs will be in `build/docs/api/html/`.
-
-## Release Process
-
-1. Update version in `CMakeLists.txt`
-2. Update `CHANGELOG.md`
-3. Create release branch
-4. Tag the release
-5. Build release artifacts
-6. Publish release
-
-## Support
-
-For development questions:
-- **GitHub Discussions**: https://github.com/soundboostpro/discussions
-- **Discord**: https://discord.gg/soundboostpro
+See CONTRIBUTING.md for detailed guidelines.
