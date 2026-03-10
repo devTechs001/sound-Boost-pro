@@ -2,268 +2,150 @@
 
 ## System Requirements
 
-### Minimum Requirements
+### Windows
+- Windows 10/11 (64-bit)
+- Intel Core i5 or equivalent AMD processor
+- 8 GB RAM (16 GB recommended)
+- 2 GB free disk space
+- DirectX 11 compatible graphics
 
-- **OS**: Windows 10 / macOS 10.15 / Linux (Ubuntu 20.04+)
-- **CPU**: Dual-core 2.0 GHz (AVX2 support recommended)
-- **RAM**: 4 GB
-- **Disk Space**: 500 MB
-- **Audio**: Any audio output device
+### Linux
+- Ubuntu 20.04+ or equivalent
+- GCC 10+ or Clang 12+
+- 8 GB RAM (16 GB recommended)
+- 2 GB free disk space
+- PulseAudio or PipeWire
 
-### Recommended Requirements
+### macOS
+- macOS 11.0+ (Big Sur or later)
+- Apple Silicon or Intel Core i5
+- 8 GB RAM (16 GB recommended)
+- 2 GB free disk space
 
-- **OS**: Windows 11 / macOS 12+ / Linux (Ubuntu 22.04+)
-- **CPU**: Quad-core 3.0 GHz+ with AVX2/NEON
-- **RAM**: 8 GB
-- **Disk Space**: 1 GB (with ML models)
-- **Audio**: Low-latency audio interface
+## Installation
 
-## Windows Installation
+### Windows
 
-### Using Installer (Recommended)
+1. Download the installer from the releases page
+2. Run `SoundBoostPro-Setup.exe`
+3. Follow the installation wizard
+4. Launch SoundBoost Pro from the Start Menu
 
-1. Download `SoundBoostPro-Setup.exe` from the official website
-2. Right-click and select "Run as Administrator"
-3. Follow the installation wizard:
-   - Accept the license agreement
-   - Choose installation directory (default: `C:\Program Files\SoundBoost Pro`)
-   - Select components:
-     - Core Application (required)
-     - ML Models (recommended)
-     - Audio Presets (recommended)
-     - Start with Windows (optional)
-4. Click "Install"
-5. Launch from Start Menu or Desktop shortcut
-
-### Using Winget
-
-```powershell
-winget install SoundBoostPro
-```
-
-### Using Chocolatey
-
-```powershell
-choco install soundboost-pro
-```
-
-### Manual Installation
-
-1. Download the ZIP archive
-2. Extract to desired location
-3. Run `SoundBoostPro.exe`
-4. (Optional) Create desktop shortcut
-
-## macOS Installation
-
-### Using DMG
-
-1. Download `SoundBoostPro.dmg`
-2. Open the DMG file
-3. Drag SoundBoost Pro to Applications folder
-4. Launch from Applications or Spotlight
-
-**Note**: On first launch, you may need to:
-- Right-click and select "Open"
-- Click "Open" in the security dialog
-
-### Using Homebrew
+### Linux (AppImage)
 
 ```bash
-brew install --cask soundboost-pro
-```
-
-### Using Manual Download
-
-1. Download the ZIP archive
-2. Extract to Applications
-3. Run from Applications folder
-
-## Linux Installation
-
-### AppImage (Universal)
-
-```bash
-# Download
-wget https://github.com/soundboostpro/releases/download/v2.0.0/SoundBoostPro-2.0.0-x86_64.AppImage
+# Download the AppImage
+wget https://github.com/devTechs001/sound-Boost-pro/releases/latest/download/SoundBoostPro-x86_64.AppImage
 
 # Make executable
-chmod +x SoundBoostPro-*.AppImage
+chmod +x SoundBoostPro-x86_64.AppImage
 
 # Run
-./SoundBoostPro-*.AppImage
-
-# (Optional) Integrate with desktop
-./SoundBoostPro-*.AppImage --appimage-integrate
+./SoundBoostPro-x86_64.AppImage
 ```
 
-### Debian/Ubuntu (.deb)
+### Linux (DEB/RPM)
 
 ```bash
-# Download
-wget https://github.com/soundboostpro/releases/download/v2.0.0/soundboostpro_2.0.0_amd64.deb
+# Debian/Ubuntu
+sudo dpkg -i soundboostpro_2.0.0_amd64.deb
+sudo apt-get install -f  # Install dependencies
 
-# Install
-sudo dpkg -i soundboostpro_*.deb
-
-# Fix dependencies if needed
-sudo apt-get install -f
+# Fedora/RHEL
+sudo dnf install soundboostpro-2.0.0.x86_64.rpm
 ```
 
-### RHEL/Fedora (.rpm)
+### macOS
 
 ```bash
-# Download
-wget https://github.com/soundboostpro/releases/download/v2.0.0/soundboostpro-2.0.0-1.x86_64.rpm
+# Download and mount DMG
+open SoundBoostPro.dmg
 
-# Install
-sudo dnf install soundboostpro-*.rpm
+# Drag to Applications folder
+cp -r /Volumes/SoundBoostPro/SoundBoostPro.app /Applications/
 ```
 
-### Arch Linux (AUR)
+## Building from Source
+
+### Prerequisites
 
 ```bash
-# Using yay
-yay -S soundboost-pro
+# Ubuntu/Debian
+sudo apt-get install build-essential cmake git \
+    qt6-base-dev qt6-multimedia-dev \
+    libpulse-dev libasound2-dev \
+    nlohmann-json3-dev
 
-# Using paru
-paru -S soundboost-pro
+# Fedora
+sudo dnf install gcc-c++ cmake git \
+    qt6-qtbase-devel qt6-qtmultimedia-devel \
+    pulseaudio-libs-devel alsa-lib-devel \
+    nlohmann-json-devel
 ```
 
-### Flatpak
+### Build Steps
 
 ```bash
-# Add Flathub repository (if not already added)
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+# Clone repository
+git clone https://github.com/devTechs001/sound-Boost-pro.git
+cd sound-Boost-pro
 
-# Install
-flatpak install flathub com.soundboostpro.app
+# Create build directory
+mkdir build && cd build
 
-# Run
-flatpak run com.soundboostpro.app
+# Configure
+cmake .. -DCMAKE_BUILD_TYPE=Release
+
+# Build
+cmake --build . --parallel
+
+# Install (optional)
+sudo cmake --install .
 ```
 
-### AppImageLauncher (Recommended for AppImage)
+## Configuration
 
-```bash
-# Install AppImageLauncher
-sudo add-apt-repository ppa:appimagelauncher-team/stable
-sudo apt-get update
-sudo apt-get install appimagelauncher
+Configuration files are stored in:
+- **Windows**: `%APPDATA%\SoundBoostPro\`
+- **Linux**: `~/.config/SoundBoostPro/`
+- **macOS**: `~/Library/Application Support/SoundBoostPro/`
 
-# Then simply open any AppImage file
+### Key Configuration Options
+
+```ini
+# Audio settings
+audio.sample_rate = 48000
+audio.buffer_size = 512
+audio.channels = 2
+
+# UI settings
+ui.theme = dark
+ui.minimize_to_tray = true
+
+# ML settings
+ml.model_path = models/
+ml.adaptive_enabled = true
 ```
 
-## Android Installation
+## Troubleshooting
 
-### Google Play Store
+### No Audio Output
+1. Check audio device selection in Settings
+2. Verify system audio is working
+3. Try increasing buffer size
 
-1. Open Google Play Store
-2. Search for "SoundBoost Pro"
-3. Tap "Install"
+### High CPU Usage
+1. Reduce sample rate
+2. Increase buffer size
+3. Disable ML features temporarily
 
-### APK Download
-
-1. Download the APK file
-2. Enable "Install from Unknown Sources" in Settings
-3. Open the downloaded APK
-4. Tap "Install"
-
-## iOS Installation
-
-### App Store
-
-1. Open App Store
-2. Search for "SoundBoost Pro"
-3. Tap "Get" or the download icon
-
-### TestFlight (Beta)
-
-1. Install TestFlight from App Store
-2. Open the TestFlight invitation link
-3. Tap "Install" in TestFlight
-
-## Post-Installation
-
-### First Launch Configuration
-
-1. **Audio Device Selection**
-   - Go to Settings > Audio
-   - Select your output device
-   - Test audio playback
-
-2. **System Audio Capture** (Windows)
-   - Install virtual audio cable if needed
-   - Select "Stereo Mix" or "What U Hear" as input
-
-3. **ML Models** (Optional)
-   - Download ML models from Settings > ML
-   - Models are ~50 MB
-
-### Updating
-
-#### Automatic Updates
-- The application checks for updates on startup
-- Enable in Settings > General > Check for Updates
-
-#### Manual Updates
-- Download the latest version
-- Install over the existing version (settings preserved)
-
-### Uninstallation
-
-#### Windows
-```
-Settings > Apps > SoundBoost Pro > Uninstall
-```
-
-#### macOS
-```
-Drag from Applications to Trash
-```
-
-#### Linux (deb)
-```bash
-sudo apt-get remove soundboostpro
-```
-
-#### Linux (rpm)
-```bash
-sudo dnf remove soundboostpro
-```
-
-#### Linux (Flatpak)
-```bash
-flatpak uninstall com.soundboostpro.app
-```
-
-## Troubleshooting Installation
-
-### Windows: "App can't be opened"
-- Right-click > Properties > Check "Unblock"
-- Run as Administrator
-
-### macOS: "App is damaged"
-```bash
-xattr -cr /Applications/SoundBoost\ Pro.app
-```
-
-### Linux: AppImage won't run
-```bash
-# Install FUSE
-sudo apt-get install libfuse2
-
-# Or use the extract option
-./SoundBoostPro-*.AppImage --appimage-extract
-./squashfs-root/AppRun
-```
-
-### Android: Install blocked
-- Go to Settings > Security
-- Enable "Unknown Sources" for your browser/file manager
+### Application Won't Start
+1. Check system requirements
+2. Verify all dependencies are installed
+3. Check logs in configuration directory
 
 ## Support
 
-For installation issues, contact:
-- Email: support@soundboostpro.com
-- GitHub Issues: https://github.com/soundboostpro/issues
+For additional help:
+- GitHub Issues: https://github.com/devTechs001/sound-Boost-pro/issues
+- Documentation: https://github.com/devTechs001/sound-Boost-pro/tree/main/docs
