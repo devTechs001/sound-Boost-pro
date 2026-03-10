@@ -12,8 +12,6 @@
 #include <csignal>
 #include <exception>
 
-#define SOUNDBOOST_VERSION "2.0.0"
-
 namespace {
     void setupSignalHandlers() {
         auto signalHandler = [](int signal) {

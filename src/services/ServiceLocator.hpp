@@ -3,8 +3,8 @@
 
 #include <memory>
 #include <unordered_map>
-#include <string>
 #include <typeindex>
+#include <stdexcept>
 #include <vector>
 
 namespace SoundBoost {
@@ -12,57 +12,70 @@ namespace SoundBoost {
 class IService {
 public:
     virtual ~IService() = default;
-    virtual std::string getName() const = 0;
     virtual bool initialize() = 0;
     virtual void shutdown() = 0;
+    virtual std::string getName() const = 0;
 };
 
 class ServiceLocator {
 public:
-    static ServiceLocator& getInstance();
+    ServiceLocator() = default;
+    ~ServiceLocator();
+
+    // Non-copyable
+    ServiceLocator(const ServiceLocator&) = delete;
+    ServiceLocator& operator=(const ServiceLocator&) = delete;
 
     template<typename T>
     void registerService(std::shared_ptr<T> service) {
-        static_assert(std::is_base_of<IService, T>::value, "T must inherit from IService");
-        m_services[typeid(T)] = service;
+        static_assert(std::is_base_of_v<IService, T>,
+            "T must derive from IService");
+
+        std::type_index typeIndex(typeid(T));
+        m_services[typeIndex] = service;
+        m_orderedServices.push_back(service);
     }
 
     template<typename T>
     T& get() {
-        auto it = m_services.find(typeid(T));
+        std::type_index typeIndex(typeid(T));
+        auto it = m_services.find(typeIndex);
+
         if (it == m_services.end()) {
-            throw std::runtime_error("Service not found: " + std::string(typeid(T).name()));
+            throw std::runtime_error("Service not found: " +
+                std::string(typeid(T).name()));
         }
+
         return *std::static_pointer_cast<T>(it->second);
     }
 
     template<typename T>
-    const T& get() const {
-        auto it = m_services.find(typeid(T));
+    T* tryGet() {
+        std::type_index typeIndex(typeid(T));
+        auto it = m_services.find(typeIndex);
+
         if (it == m_services.end()) {
-            throw std::runtime_error("Service not found: " + std::string(typeid(T).name()));
+            return nullptr;
         }
-        return *std::static_pointer_cast<const T>(it->second);
+
+        return std::static_pointer_cast<T>(it->second).get();
     }
 
     template<typename T>
-    bool hasService() const {
-        return m_services.find(typeid(T)) != m_services.end();
+    bool has() const {
+        return m_services.find(std::type_index(typeid(T))) != m_services.end();
     }
 
-    const std::unordered_map<std::type_index, std::shared_ptr<IService>>& getAllServices() const {
-        return m_services;
+    std::vector<std::shared_ptr<IService>> getAllServices() const {
+        return m_orderedServices;
     }
 
+    void initializeAll();
     void shutdownAll();
 
 private:
-    ServiceLocator() = default;
-    ~ServiceLocator() = default;
-    ServiceLocator(const ServiceLocator&) = delete;
-    ServiceLocator& operator=(const ServiceLocator&) = delete;
-
     std::unordered_map<std::type_index, std::shared_ptr<IService>> m_services;
+    std::vector<std::shared_ptr<IService>> m_orderedServices;
 };
 
 } // namespace SoundBoost

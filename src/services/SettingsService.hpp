@@ -2,69 +2,70 @@
 #pragma once
 
 #include "ServiceLocator.hpp"
+#include <QObject>
+#include <QSettings>
 #include <QVariant>
-#include <string>
-#include <unordered_map>
-#include <mutex>
+#include <memory>
+#include <functional>
 
 namespace SoundBoost {
 
-class SettingsService : public IService {
+class SettingsService : public QObject, public IService {
     Q_OBJECT
 
 public:
-    SettingsService() = default;
-    ~SettingsService() override = default;
-
-    std::string getName() const override { return "SettingsService"; }
+    SettingsService();
+    ~SettingsService() override;
 
     bool initialize() override;
     void shutdown() override;
+    std::string getName() const override { return "SettingsService"; }
 
-    // Settings access
+    // Getters
     template<typename T>
-    T get(const std::string& key, T defaultValue) const;
+    T get(const QString& key, const T& defaultValue = T{}) const {
+        QVariant value = m_settings->value(key, QVariant::fromValue(defaultValue));
+        return value.value<T>();
+    }
 
+    QVariant get(const QString& key, const QVariant& defaultValue = QVariant()) const;
+
+    // Setters
     template<typename T>
-    void set(const std::string& key, const T& value);
+    void set(const QString& key, const T& value) {
+        m_settings->setValue(key, QVariant::fromValue(value));
+        emit settingChanged(key, QVariant::fromValue(value));
+    }
 
+    void set(const QString& key, const QVariant& value);
+
+    // Remove
+    void remove(const QString& key);
+    bool contains(const QString& key) const;
+
+    // Groups
+    void beginGroup(const QString& prefix);
+    void endGroup();
+    QStringList childKeys() const;
+    QStringList childGroups() const;
+
+    // Persistence
     void save();
     void load();
-
     void reset();
+
+    // Export/Import
+    bool exportToFile(const QString& path) const;
+    bool importFromFile(const QString& path);
 
 signals:
     void settingChanged(const QString& key, const QVariant& value);
+    void settingsReset();
 
 private:
-    std::unordered_map<std::string, QVariant> m_settings;
-    mutable std::mutex m_mutex;
-    std::string m_settingsPath;
+    void setDefaults();
+
+    std::unique_ptr<QSettings> m_settings;
 };
-
-// Template implementations
-template<typename T>
-T SettingsService::get(const std::string& key, T defaultValue) const {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    auto it = m_settings.find(key);
-    if (it != m_settings.end()) {
-        bool ok = false;
-        T value = it->second.value<T>(&ok);
-        if (ok) {
-            return value;
-        }
-    }
-    return defaultValue;
-}
-
-template<typename T>
-void SettingsService::set(const std::string& key, const T& value) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    m_settings[key] = QVariant::fromValue(value);
-
-    emit settingChanged(QString::fromStdString(key), QVariant::fromValue(value));
-}
 
 } // namespace SoundBoost

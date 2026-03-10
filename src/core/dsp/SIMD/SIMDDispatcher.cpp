@@ -87,6 +87,112 @@ SIMDLevel detectSIMDLevel() {
     return SIMDLevel::None;
 }
 
+// AVX2 implementations
+#ifdef HAS_X86_SIMD
+static void addAVX2(float* dst, const float* src, size_t count) {
+    size_t i = 0;
+    for (; i + 8 <= count; i += 8) {
+        __m256 a = _mm256_loadu_ps(dst + i);
+        __m256 b = _mm256_loadu_ps(src + i);
+        _mm256_storeu_ps(dst + i, _mm256_add_ps(a, b));
+    }
+    for (; i < count; ++i) {
+        dst[i] += src[i];
+    }
+}
+
+static void multiplyAVX2(float* data, float scalar, size_t count) {
+    __m256 s = _mm256_set1_ps(scalar);
+    size_t i = 0;
+    for (; i + 8 <= count; i += 8) {
+        __m256 v = _mm256_loadu_ps(data + i);
+        _mm256_storeu_ps(data + i, _mm256_mul_ps(v, s));
+    }
+    for (; i < count; ++i) {
+        data[i] *= scalar;
+    }
+}
+
+static void clipAVX2(float* data, float minVal, float maxVal, size_t count) {
+    __m256 minVec = _mm256_set1_ps(minVal);
+    __m256 maxVec = _mm256_set1_ps(maxVal);
+    size_t i = 0;
+    for (; i + 8 <= count; i += 8) {
+        __m256 v = _mm256_loadu_ps(data + i);
+        v = _mm256_max_ps(v, minVec);
+        v = _mm256_min_ps(v, maxVec);
+        _mm256_storeu_ps(data + i, v);
+    }
+    for (; i < count; ++i) {
+        data[i] = std::clamp(data[i], minVal, maxVal);
+    }
+}
+
+static float sumAVX2(const float* data, size_t count) {
+    __m256 sum = _mm256_setzero_ps();
+    size_t i = 0;
+    for (; i + 8 <= count; i += 8) {
+        __m256 v = _mm256_loadu_ps(data + i);
+        sum = _mm256_add_ps(sum, v);
+    }
+
+    // Horizontal sum
+    __m128 hi = _mm256_extractf128_ps(sum, 1);
+    __m128 lo = _mm256_castps256_ps128(sum);
+    __m128 sum128 = _mm_add_ps(hi, lo);
+    sum128 = _mm_hadd_ps(sum128, sum128);
+    sum128 = _mm_hadd_ps(sum128, sum128);
+
+    float result = _mm_cvtss_f32(sum128);
+    for (; i < count; ++i) {
+        result += data[i];
+    }
+    return result;
+}
+#endif
+
+// NEON implementations
+#ifdef HAS_NEON
+static void addNEON(float* dst, const float* src, size_t count) {
+    size_t i = 0;
+    for (; i + 4 <= count; i += 4) {
+        float32x4_t a = vld1q_f32(dst + i);
+        float32x4_t b = vld1q_f32(src + i);
+        vst1q_f32(dst + i, vaddq_f32(a, b));
+    }
+    for (; i < count; ++i) {
+        dst[i] += src[i];
+    }
+}
+
+static void multiplyNEON(float* data, float scalar, size_t count) {
+    float32x4_t s = vdupq_n_f32(scalar);
+    size_t i = 0;
+    for (; i + 4 <= count; i += 4) {
+        float32x4_t v = vld1q_f32(data + i);
+        vst1q_f32(data + i, vmulq_f32(v, s));
+    }
+    for (; i < count; ++i) {
+        data[i] *= scalar;
+    }
+}
+
+static void clipNEON(float* data, float minVal, float maxVal, size_t count) {
+    float32x4_t minVec = vdupq_n_f32(minVal);
+    float32x4_t maxVec = vdupq_n_f32(maxVal);
+    size_t i = 0;
+    for (; i + 4 <= count; i += 4) {
+        float32x4_t v = vld1q_f32(data + i);
+        v = vmaxq_f32(v, minVec);
+        v = vminq_f32(v, maxVec);
+        vst1q_f32(data + i, v);
+    }
+    for (; i < count; ++i) {
+        data[i] = std::clamp(data[i], minVal, maxVal);
+    }
+}
+#endif
+
 // Scalar fallbacks
 static void addScalar(float* dst, const float* src, size_t count) {
     for (size_t i = 0; i < count; ++i) {
@@ -116,30 +222,90 @@ static float sumScalar(const float* data, size_t count) {
 
 // Public API - dispatches to best implementation
 void add(float* dst, const float* src, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        dst[i] += src[i];
+    static auto level = detectSIMDLevel();
+
+#ifdef HAS_X86_SIMD
+    if (level >= SIMDLevel::AVX2) {
+        addAVX2(dst, src, count);
+        return;
     }
+#endif
+#ifdef HAS_NEON
+    if (level == SIMDLevel::NEON) {
+        addNEON(dst, src, count);
+        return;
+    }
+#endif
+    addScalar(dst, src, count);
 }
 
 void addWithGain(float* dst, const float* src, float gain, size_t count) {
+    static auto level = detectSIMDLevel();
+
+#ifdef HAS_X86_SIMD
+    if (level >= SIMDLevel::AVX2) {
+        __m256 g = _mm256_set1_ps(gain);
+        size_t i = 0;
+        for (; i + 8 <= count; i += 8) {
+            __m256 d = _mm256_loadu_ps(dst + i);
+            __m256 s = _mm256_loadu_ps(src + i);
+            _mm256_storeu_ps(dst + i, _mm256_fmadd_ps(s, g, d));
+        }
+        for (; i < count; ++i) {
+            dst[i] += src[i] * gain;
+        }
+        return;
+    }
+#endif
     for (size_t i = 0; i < count; ++i) {
         dst[i] += src[i] * gain;
     }
 }
 
 void multiply(float* data, float scalar, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        data[i] *= scalar;
+    static auto level = detectSIMDLevel();
+
+#ifdef HAS_X86_SIMD
+    if (level >= SIMDLevel::AVX2) {
+        multiplyAVX2(data, scalar, count);
+        return;
     }
+#endif
+#ifdef HAS_NEON
+    if (level == SIMDLevel::NEON) {
+        multiplyNEON(data, scalar, count);
+        return;
+    }
+#endif
+    multiplyScalar(data, scalar, count);
 }
 
 void clip(float* data, float min, float max, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        data[i] = std::clamp(data[i], min, max);
+    static auto level = detectSIMDLevel();
+
+#ifdef HAS_X86_SIMD
+    if (level >= SIMDLevel::AVX2) {
+        clipAVX2(data, min, max, count);
+        return;
     }
+#endif
+#ifdef HAS_NEON
+    if (level == SIMDLevel::NEON) {
+        clipNEON(data, min, max, count);
+        return;
+    }
+#endif
+    clipScalar(data, min, max, count);
 }
 
 float sum(const float* data, size_t count) {
+    static auto level = detectSIMDLevel();
+
+#ifdef HAS_X86_SIMD
+    if (level >= SIMDLevel::AVX2) {
+        return sumAVX2(data, count);
+    }
+#endif
     return sumScalar(data, count);
 }
 
@@ -153,42 +319,34 @@ void clear(float* data, size_t count) {
 
 float findMax(const float* data, size_t count) {
     if (count == 0) return 0.0f;
+
+    static auto level = detectSIMDLevel();
+
+#ifdef HAS_X86_SIMD
+    if (level >= SIMDLevel::AVX2 && count >= 8) {
+        __m256 maxVec = _mm256_loadu_ps(data);
+        size_t i = 8;
+        for (; i + 8 <= count; i += 8) {
+            __m256 v = _mm256_loadu_ps(data + i);
+            maxVec = _mm256_max_ps(maxVec, v);
+        }
+
+        // Reduce
+        __m128 hi = _mm256_extractf128_ps(maxVec, 1);
+        __m128 lo = _mm256_castps256_ps128(maxVec);
+        __m128 max128 = _mm_max_ps(hi, lo);
+        max128 = _mm_max_ps(max128, _mm_shuffle_ps(max128, max128, _MM_SHUFFLE(1, 0, 3, 2)));
+        max128 = _mm_max_ps(max128, _mm_shuffle_ps(max128, max128, _MM_SHUFFLE(2, 3, 0, 1)));
+
+        float result = _mm_cvtss_f32(max128);
+        for (; i < count; ++i) {
+            result = std::max(result, data[i]);
+        }
+        return result;
+    }
+#endif
+
     return *std::max_element(data, data + count);
-}
-
-float findMin(const float* data, size_t count) {
-    if (count == 0) return 0.0f;
-    return *std::min_element(data, data + count);
-}
-
-void multiplyAdd(float* dst, const float* src1, const float* src2, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        dst[i] += src1[i] * src2[i];
-    }
-}
-
-void abs(float* dst, const float* src, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        dst[i] = std::abs(src[i]);
-    }
-}
-
-float dotProduct(const float* a, const float* b, size_t count) {
-    float result = 0.0f;
-    for (size_t i = 0; i < count; ++i) {
-        result += a[i] * b[i];
-    }
-    return result;
-}
-
-void complexMultiply(float* realDst, float* imagDst,
-                     const float* realA, const float* imagA,
-                     const float* realB, const float* imagB,
-                     size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        realDst[i] = realA[i] * realB[i] - imagA[i] * imagB[i];
-        imagDst[i] = realA[i] * imagB[i] + imagA[i] * realB[i];
-    }
 }
 
 void interleave(float* dst, const float* const* src, int channels, size_t samples) {
@@ -221,6 +379,22 @@ void monoToStereo(float* dst, const float* src, size_t samples) {
 }
 
 void applyWindow(float* data, const float* window, size_t count) {
+    static auto level = detectSIMDLevel();
+
+#ifdef HAS_X86_SIMD
+    if (level >= SIMDLevel::AVX2) {
+        size_t i = 0;
+        for (; i + 8 <= count; i += 8) {
+            __m256 d = _mm256_loadu_ps(data + i);
+            __m256 w = _mm256_loadu_ps(window + i);
+            _mm256_storeu_ps(data + i, _mm256_mul_ps(d, w));
+        }
+        for (; i < count; ++i) {
+            data[i] *= window[i];
+        }
+        return;
+    }
+#endif
     for (size_t i = 0; i < count; ++i) {
         data[i] *= window[i];
     }

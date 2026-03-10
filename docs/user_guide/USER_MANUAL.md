@@ -213,7 +213,7 @@ Real-time BPM detection and beat tracking:
 
 ### Advanced
 
-- **SIMD Optimization**: Enable CPU optimization
+- **SIMD Optimization**: Enable CPU optimizations
 - **ML Processing**: Enable/disable ML features
 - **Logging**: Debug logging level
 

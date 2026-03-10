@@ -208,9 +208,4 @@ ServiceLocator& Application::getServices() {
     return *m_services;
 }
 
-void Application::handleSettingChange(const std::string& key, const QVariant& value) {
-    // Handle setting changes
-    LOG_DEBUG("Setting changed: {} = {}", key, value.toString().toStdString());
-}
-
 } // namespace SoundBoost

@@ -3,30 +3,38 @@
 
 #include <string>
 #include <vector>
-#include <utility>
+#include <memory>
+#include <array>
+
+namespace Ort { class Session; class Env; }
 
 namespace SoundBoost {
 
 class GenreDetector {
 public:
-    GenreDetector() = default;
-    ~GenreDetector() = default;
+    GenreDetector();
+    ~GenreDetector();
 
-    bool loadModel(const std::string& modelPath) { return true; }
+    bool loadModel(const std::string& modelPath);
     bool isLoaded() const { return m_loaded; }
 
-    std::pair<std::string, float> detect(const std::vector<float>& features) {
-        return {"Unknown", 0.0f};
-    }
+    std::pair<std::string, float> detect(const std::vector<float>& features);
+    std::vector<std::pair<std::string, float>> detectTop(
+        const std::vector<float>& features, int topK = 3);
 
     const std::vector<std::string>& getGenreLabels() const { return m_genreLabels; }
 
 private:
-    std::vector<std::string> m_genreLabels = {
-        "Blues", "Classical", "Country", "Disco", "Hip-Hop",
-        "Jazz", "Metal", "Pop", "Reggae", "Rock",
-        "Electronic", "Folk", "R&B", "Soul", "Punk"
-    };
+    std::vector<float> runInference(const std::vector<float>& features);
+    void initializeLabels();
+
+    std::unique_ptr<Ort::Env> m_env;
+    std::unique_ptr<Ort::Session> m_session;
+
+    std::vector<std::string> m_genreLabels;
+    std::vector<int64_t> m_inputShape;
+    std::vector<int64_t> m_outputShape;
+
     bool m_loaded{false};
 };
 
